@@ -1,27 +1,57 @@
 #include <WiFi.h>
 #include <WiFiClient.h>
 #include <WebServer.h>
-#include <ESPmDNS.h>
-#include <DHT.h>
+#include <Wire.h>
+#include <Adafruit_Sensor.h>
+#include <Adafruit_BME280.h>
+
 
 #include "wifi_settings.h"
 
-#define DHTPIN 32     // Digital pin connected to the DHT sensor
-#define DHTTYPE DHT11   // DHT 11
+#define SDA1 21
+#define SCL1 22
+#define BME280_ADDR 0x76
 
 const char *ssid = WIFI_SSID;
 const char *password = WIFI_PASS;
 
 WebServer server(80);
-DHT dht(DHTPIN, DHTTYPE);
 
 float humidity;
 float temp;
 
+TwoWire i2cbus = TwoWire(0);
+Adafruit_BME280 bme;
+
+void scan_i2cbus(){
+  Serial.println("Scanning I2C Addresses Channel 1");
+  uint8_t cnt = 0;
+  for (uint8_t i=0; i<128; i++) {
+    i2cbus.beginTransmission(i);
+    uint8_t  ec = i2cbus.endTransmission(true);
+    if (ec==0) {
+      if (i<16)
+        Serial.print('0');
+      Serial.print(i, HEX);
+      cnt++;
+     } else Serial.print("..");
+     Serial.print(' ');
+     if ( (i&0x0f)==0x0f)
+     Serial.println();
+  }
+  Serial.print("Scan Completed,");
+  Serial.print(cnt);
+  Serial.println(" I2C Devices found.");
+}
+
 void setup(void) {
   Serial.begin(921600);
-  pinMode (DHTPIN, INPUT);
-  dht.begin();
+  i2cbus.begin(SDA1, SCL1, 400000);
+  if (!bme.begin(BME280_ADDR, &i2cbus)) {
+    Serial.println("Cannot start BME sensor comms.");
+    return;
+  }
+
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);
   Serial.println("");
@@ -36,10 +66,6 @@ void setup(void) {
   Serial.println(ssid);
   Serial.print("IP address: ");
   Serial.println(WiFi.localIP());
-
-  if (MDNS.begin("esp32")) {
-    Serial.println("MDNS responder started");
-  }
 
   server.on("/", []() {
     server.send(200, "text/plain", "<a href=\"/metric\"s>Prometheus metrics</a>");
@@ -61,13 +87,19 @@ void setup(void) {
 }
 
 void update_sensors() {
-  Serial.println(F("Begin to read from DHT sensor"));
-  humidity = dht.readHumidity();
-  temp = dht.readTemperature();
-
+  Serial.println(F("Begin to read from BMP sensor"));
+  humidity = bme.readHumidity();
+  temp = bme.readTemperature();
   if (isnan(humidity) || isnan(temp)) {
-    Serial.println(F("Failed to read from DHT sensor!"));
+    Serial.println(F("Failed to read from BMP sensor!"));
     return;
+  } else {
+    Serial.print("Temperature = ");
+    Serial.print(bme.readTemperature());
+    Serial.println(" *C");
+    Serial.print("Humidity = ");
+    Serial.print(bme.readHumidity());
+    Serial.println(" %");
   }
 }
 
