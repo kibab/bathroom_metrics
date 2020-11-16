@@ -1,2 +1,3 @@
 #define WIFI_SSID "your_ssid"
 #define WIFI_PASS "your_pass"
+#define PUSH_URL "http://PUSH_GATEWAY_HOST/metrics/job/JOB_NAME"
