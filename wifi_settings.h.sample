@@ -1,3 +1,13 @@
 #define WIFI_SSID "your_ssid"
 #define WIFI_PASS "your_pass"
 #define PUSH_URL "http://PUSH_GATEWAY_HOST/metrics/job/JOB_NAME"
+
+// Define this if using the static network configuration
+//#define STATIC_IP_CONFIG 1
+
+// Make sure that the settings below suit your network
+#define DEVICE_IP "10.1.1.2"
+#define NETMASK "255.0.0.0"
+#define GATEWAY_IP "10.1.1.1"
+#define DNS_1 "8.8.8.8"
+#define DNS_2 "4.4.4.4"

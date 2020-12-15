@@ -74,8 +74,35 @@ void pushMetricsRetry() {
   }
 }
 
+#ifdef STATIC_IP_CONFIG
+bool configure_ip() {
+    IPAddress device_ip, netmask, gateway_ip, dns_1, dns_2;
+    if (!device_ip.fromString(DEVICE_IP) || !netmask.fromString(NETMASK)
+    || !gateway_ip.fromString(GATEWAY_IP)
+    || !dns_1.fromString(DNS_1) || !dns_2.fromString(DNS_2)) {
+      Serial.println("Failed to initialize IP addresses, check network settings!");
+      return false;
+    }
+    if (!WiFi.config(device_ip, gateway_ip, netmask, dns_1, dns_2)) {
+      Serial.println("Failed to configure WiFi!");
+      return false;
+    }
+    Serial.println("WiFi static IP configuration applied successully");
+    return true;
+}
+#else
+bool configure_ip() {
+  Serial.println("IP settings will be obtained through DHCP");
+  return true;
+}
+#endif
+
 void connectNetwork() {
   WiFi.mode(WIFI_STA);
+  if (!configure_ip()) {
+    Serial.println("Cannot configure IP settings");
+    return;
+  }
   Serial.println("Starting to connect to the WiFi network");
   WiFi.begin(ssid, password);
 
@@ -138,6 +165,7 @@ void setupServer() {
 void setupHardware() {
   setCpuFrequencyMhz(80); // 80 Mhz is minimum for WiFi to work
   Serial.begin(921600);   // Should match settings in Arduino
+  Serial.println();
   i2cbus.begin(SDA1, SCL1, 400000);
   if (!bme.begin(BME280_ADDR, &i2cbus)) {
     Serial.println("Cannot start BME sensor comms.");
