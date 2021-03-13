@@ -188,7 +188,14 @@ void setupHardware() {
   if (!bme.begin(BME280_ADDR, &i2cbus)) {
     Serial.println("Cannot start BME sensor comms.");
     return;
-  }  
+  }
+
+  // "Weather station" scenario from the datasheet
+  bme.setSampling(Adafruit_BME280::MODE_FORCED,
+                    Adafruit_BME280::SAMPLING_X1, // temperature
+                    Adafruit_BME280::SAMPLING_X1, // pressure
+                    Adafruit_BME280::SAMPLING_X1, // humidity
+                    Adafruit_BME280::FILTER_OFF);
 }
 
 const bool serverMode = false;
@@ -212,6 +219,7 @@ void setup(void) {
 
 void updateSensors() {
   Serial.println(F("Begin to read from BMP sensor"));
+  bme.takeForcedMeasurement();
   humidity = bme.readHumidity();
   temp = bme.readTemperature();
   if (isnan(humidity) || isnan(temp)) {
