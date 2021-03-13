@@ -23,10 +23,16 @@
 #define MAX_PUSH_RETRIES 3
 
 /* Metrics push interval */
-#define PUSH_INTERVAL_SEC 300
+#define PUSH_INTERVAL_SEC 120
+
+/* Max connection attempts */
+#define MAX_CONN_ATTEMPTS 10
 
 const char *ssid = WIFI_SSID;
 const char *password = WIFI_PASS;
+
+/* Counter of failed WiFi connect attempts */
+RTC_DATA_ATTR unsigned int total_conn_failures = 0;
 
 float humidity;
 float temp;
@@ -44,6 +50,9 @@ String getMetrics() {
       "# HELP temperature Ambient temperature.\n" + 
       "# TYPE temperature gauge\n" + 
       "temperature " + String(temp) + "\n"
+      "# HELP conn_failures_count Number of failed WiFi connect attempts\n" + 
+      "# TYPE conn_failures_count counter\n" +
+      "conn_failures_count " + String(total_conn_failures) + "\n"
     );
 }
 
@@ -97,25 +106,34 @@ bool configure_ip() {
 }
 #endif
 
-void connectNetwork() {
+bool connectNetwork() {
   WiFi.mode(WIFI_STA);
   if (!configure_ip()) {
     Serial.println("Cannot configure IP settings");
-    return;
+    return false;
   }
   Serial.println("Starting to connect to the WiFi network");
+  Serial.printf("Prev conn failures: %d\n", total_conn_failures);
   WiFi.begin(ssid, password);
 
   // Wait for connection
-  while (WiFi.status() != WL_CONNECTED) {
+  int conn_attempts_left = MAX_CONN_ATTEMPTS;
+  while (WiFi.status() != WL_CONNECTED && conn_attempts_left > 0) {
     delay(500);
     Serial.print(".");
+    conn_attempts_left--;
+  }
+  if (conn_attempts_left == 0) {
+    Serial.println("\nFailed to connect to WiFi!");
+    total_conn_failures++;
+    return false;
   }
   Serial.println("");
   Serial.print("Connected to ");
   Serial.println(ssid);
   Serial.print("IP address: ");
   Serial.println(WiFi.localIP());  
+  return true;
 }
 
 /* Stop all power-hungry h/w, schedule time to wake up, and hibernate */
@@ -177,7 +195,11 @@ const bool serverMode = false;
 
 void setup(void) {
   setupHardware();
-  connectNetwork();
+  bool wifi_connected = connectNetwork();
+  if (!wifi_connected && !serverMode) {
+    goSleep(PUSH_INTERVAL_SEC);
+    /* NOTREACHED */
+  }
   if (serverMode) {
     setupServer();
   } else {
