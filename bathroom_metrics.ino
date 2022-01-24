@@ -182,9 +182,9 @@ void setupServer() {
 
 void setupHardware() {
   setCpuFrequencyMhz(80); // 80 Mhz is minimum for WiFi to work
-  Serial.begin(921600);   // Should match settings in Arduino
+  Serial.begin(1000000);   // Should match settings in Arduino
   Serial.println();
-  i2cbus.begin(SDA1, SCL1, 400000);
+  i2cbus.begin(SDA1, SCL1, (uint32_t)400000);
   if (!bme.begin(BME280_ADDR, &i2cbus)) {
     Serial.println("Cannot start BME sensor comms.");
     return;
