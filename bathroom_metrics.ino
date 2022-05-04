@@ -22,6 +22,9 @@
 /* BME280 power pin */
 #define BME280_PWR 17
 
+/* Measurement for the input voltage */
+#define VIN_MEASURE 34
+
 /* Number of retries for pushing metrics to Push Gateway */
 #define MAX_PUSH_RETRIES 3
 
@@ -39,6 +42,7 @@ RTC_DATA_ATTR unsigned int total_conn_failures = 0;
 
 float humidity;
 float temp;
+unsigned int vin;
 
 WebServer server(80);
 TwoWire i2cbus(0);
@@ -53,6 +57,9 @@ String getMetrics() {
       "# HELP temperature Ambient temperature.\n" + 
       "# TYPE temperature gauge\n" + 
       "temperature " + String(temp) + "\n"
+      "# HELP vin Input voltage.\n" +
+      "# TYPE vin gauge\n" +
+      "vin " + String(vin) + "\n"
       "# HELP conn_failures_count Number of failed WiFi connect attempts\n" + 
       "# TYPE conn_failures_count counter\n" +
       "conn_failures_count " + String(total_conn_failures) + "\n"
@@ -196,6 +203,9 @@ void setupHardware() {
   digitalWrite(BME280_PWR, HIGH);
   delay(100);
 
+  /* Set up ADC input as input */
+  pinMode(VIN_MEASURE, INPUT);
+
   i2cbus.begin(SDA1, SCL1, (uint32_t)400000);
   if (!bme.begin(BME280_ADDR, &i2cbus)) {
     Serial.println("Cannot start BME sensor comms.");
@@ -230,6 +240,11 @@ void setup(void) {
 }
 
 void updateSensors() {
+  Serial.println("Read input voltage from ADC");
+  vin = analogRead(VIN_MEASURE);
+  Serial.print("VIN = ");
+  Serial.print(vin);
+  Serial.println(" V");
   Serial.println(F("Begin to read from BMP sensor"));
   bme.takeForcedMeasurement();
   humidity = bme.readHumidity();
