@@ -19,6 +19,9 @@
 /* BME280 I2C address */
 #define BME280_ADDR 0x76
 
+/* BME280 power pin */
+#define BME280_PWR 17
+
 /* Number of retries for pushing metrics to Push Gateway */
 #define MAX_PUSH_RETRIES 3
 
@@ -147,6 +150,9 @@ void goSleep(int wakeupTimer) {
   esp_wifi_stop();
   esp_bt_controller_disable();
 
+  /* Power off a BME280 */
+  digitalWrite(BME280_PWR, LOW);
+
   // Configure the timer to wake us up!
   esp_sleep_enable_timer_wakeup(wakeupTimer * 1000000L);
 
@@ -184,6 +190,12 @@ void setupHardware() {
   setCpuFrequencyMhz(80); // 80 Mhz is minimum for WiFi to work
   Serial.begin(1000000);   // Should match settings in Arduino
   Serial.println();
+
+  /* Power on BME280 */
+  pinMode(BME280_PWR, OUTPUT);
+  digitalWrite(BME280_PWR, HIGH);
+  delay(100);
+
   i2cbus.begin(SDA1, SCL1, (uint32_t)400000);
   if (!bme.begin(BME280_ADDR, &i2cbus)) {
     Serial.println("Cannot start BME sensor comms.");
