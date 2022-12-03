@@ -11,6 +11,7 @@
 #include <esp_bt.h>
 
 #include "wifi_settings.h"
+#include "sensor.h"
 
 /* Pins for I2C comms */
 #define SDA1 21
@@ -46,7 +47,7 @@ unsigned int vin;
 
 WebServer server(80);
 TwoWire i2cbus(0);
-Adafruit_BME280 bme;
+TempHumSensor *sensor;
 
 /* Generate metrics in Prometheus format */
 String getMetrics() {
@@ -153,7 +154,7 @@ void goSleep(int wakeupTimer) {
   WiFi.mode(WIFI_OFF);
   btStop();
 
-  adc_power_off();
+  //adc_power_off();
   esp_wifi_stop();
   esp_bt_controller_disable();
 
@@ -205,19 +206,16 @@ void setupHardware() {
 
   /* Set up ADC input as input */
   pinMode(VIN_MEASURE, INPUT);
+  sensor = new SHT21Sensor();
 
   i2cbus.begin(SDA1, SCL1, (uint32_t)400000);
-  if (!bme.begin(BME280_ADDR, &i2cbus)) {
-    Serial.println("Cannot start BME sensor comms.");
+  if (!sensor->StartComms(&i2cbus)) {
+    Serial.println("Cannot start sensor comms.");
     return;
   }
+  Serial.println(sensor->GetSensorTypeStr());
 
-  // "Weather station" scenario from the datasheet
-  bme.setSampling(Adafruit_BME280::MODE_FORCED,
-                    Adafruit_BME280::SAMPLING_X1, // temperature
-                    Adafruit_BME280::SAMPLING_X1, // pressure
-                    Adafruit_BME280::SAMPLING_X1, // humidity
-                    Adafruit_BME280::FILTER_OFF);
+  sensor->Configure();
 }
 
 const bool serverMode = false;
@@ -245,19 +243,19 @@ void updateSensors() {
   Serial.print("VIN = ");
   Serial.print(vin);
   Serial.println(" V");
-  Serial.println(F("Begin to read from BMP sensor"));
-  bme.takeForcedMeasurement();
-  humidity = bme.readHumidity();
-  temp = bme.readTemperature();
+  Serial.println(F("Begin to read from the sensor"));
+  sensor->TakeMeasurement();
+  humidity = sensor->GetHumidity();
+  temp = sensor->GetTemperature();
   if (isnan(humidity) || isnan(temp)) {
-    Serial.println(F("Failed to read from BMP sensor!"));
+    Serial.println(F("Failed to read from the sensor!"));
     return;
   } else {
     Serial.print("Temperature = ");
-    Serial.print(bme.readTemperature());
+    Serial.print(sensor->GetTemperature());
     Serial.println(" *C");
     Serial.print("Humidity = ");
-    Serial.print(bme.readHumidity());
+    Serial.print(sensor->GetHumidity());
     Serial.println(" %");
   }
 }
