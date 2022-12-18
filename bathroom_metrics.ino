@@ -1,24 +1,37 @@
+#ifdef ESP32
 #include <HTTPClient.h>
 #include <WebServer.h>
 #include <WiFi.h>
 #include <WiFiClient.h>
+#else
+#include <ESP8266HTTPClient.h>
+#include <ESP8266WebServer.h>
+#include <ESP8266WiFi.h>
+#define WebServer ESP8266WebServer
+#define RTC_DATA_ATTR
+#endif
+
 #include <Wire.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BME280.h>
 
+#ifdef ESP32
 #include <driver/adc.h>
 #include <esp_wifi.h>
 #include <esp_bt.h>
+#endif
 
 #include "wifi_settings.h"
 #include "sensor.h"
 
 /* Pins for I2C comms */
+#ifdef ESP32
 #define SDA1 21
 #define SCL1 22
-
-/* BME280 I2C address */
-#define BME280_ADDR 0x76
+#else
+#define SDA1 4
+#define SCL1 5
+#endif
 
 /* BME280 power pin */
 #define BME280_PWR 17
@@ -30,7 +43,7 @@
 #define MAX_PUSH_RETRIES 3
 
 /* Metrics push interval */
-#define PUSH_INTERVAL_SEC 120
+#define PUSH_INTERVAL_SEC 10
 
 /* Max connection attempts */
 #define MAX_CONN_ATTEMPTS 10
@@ -46,7 +59,11 @@ float temp;
 unsigned int vin;
 
 WebServer server(80);
+#ifdef ESP32
 TwoWire i2cbus(0);
+#else
+TwoWire i2cbus;
+#endif
 TempHumSensor *sensor;
 
 /* Generate metrics in Prometheus format */
@@ -71,12 +88,14 @@ String getMetrics() {
 bool pushMetrics() {
   bool success = false;
   Serial.println("Starting to push metrics to " PUSH_URL);
-  
+
+  WiFiClient client;
   HTTPClient http;
 
-  http.begin(PUSH_URL);
+  http.begin(client, PUSH_URL);
   http.addHeader("Content-Type", "application/x-www-form-urlencoded");
-  int httpResponseCode = http.POST(getMetrics());
+  String metrics = getMetrics();
+  int httpResponseCode = http.POST(metrics);
   Serial.print("HTTP Response code: ");
   Serial.println(httpResponseCode);
   if (httpResponseCode > 0)
@@ -152,20 +171,23 @@ void goSleep(int wakeupTimer) {
   Serial.println("Going to sleep...");
   WiFi.disconnect(true);
   WiFi.mode(WIFI_OFF);
-  btStop();
+  /* Power off a BME280 */
+#ifdef ESP32
+  digitalWrite(BME280_PWR, LOW);
+#endif
 
-  //adc_power_off();
+#ifdef ESP32
+  btStop();
   esp_wifi_stop();
   esp_bt_controller_disable();
-
-  /* Power off a BME280 */
-  digitalWrite(BME280_PWR, LOW);
-
   // Configure the timer to wake us up!
   esp_sleep_enable_timer_wakeup(wakeupTimer * 1000000L);
 
   // Go to sleep! Zzzz
   esp_deep_sleep_start();
+#else
+  ESP.deepSleep(wakeupTimer * 1000000L);
+#endif
 }
 
 void setupServer() {
@@ -195,14 +217,18 @@ void setupServer() {
 }
 
 void setupHardware() {
-  setCpuFrequencyMhz(80); // 80 Mhz is minimum for WiFi to work
-  Serial.begin(1000000);   // Should match settings in Arduino
+#ifdef ESP32
+  setCpuFrequencyMhz(80); // 80 Mhz is minimum for WiFi to work. ESP8266 works on 80 Mhz by default.
+#endif
+  Serial.begin(115200);   // Should match settings in Arduino
   Serial.println();
 
   /* Power on BME280 */
+  #ifdef ESP32
   pinMode(BME280_PWR, OUTPUT);
   digitalWrite(BME280_PWR, HIGH);
   delay(100);
+  #endif
 
   /* Set up ADC input as input */
   pinMode(VIN_MEASURE, INPUT);
@@ -213,7 +239,7 @@ void setupHardware() {
     Serial.println("Cannot start sensor comms.");
     return;
   }
-  Serial.println(sensor->GetSensorTypeStr());
+  Serial.println("Sensor type: " + sensor->GetSensorTypeStr());
 
   sensor->Configure();
 }
@@ -222,6 +248,9 @@ const bool serverMode = false;
 
 void setup(void) {
   setupHardware();
+#ifndef ESP32
+  Serial.printf(" ESP8266 Chip id = %08X\n", ESP.getChipId());
+#endif
   bool wifi_connected = connectNetwork();
   if (!wifi_connected && !serverMode) {
     goSleep(PUSH_INTERVAL_SEC);
